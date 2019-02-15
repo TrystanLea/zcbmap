@@ -1,0 +1,13 @@
+<script src="stream.js"></script>
+<script src="shapefile.js"></script>
+<script src="dbf.js"></script>
+<script src="../lib/jquery-1.11.3.min.js"></script>
+<pre id="out"></pre>
+<script>
+shapefile = new Shapefile({
+    shp: "wales_wa_2011_gen.shp",
+    dbf: "wales_wa_2011_gen.dbf"
+}, function(data){
+    $("#out").html(JSON.stringify(data.geojson));
+});
+</script>

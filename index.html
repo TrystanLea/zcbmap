@@ -44,9 +44,13 @@
   </body>
 </html>
 <script>
-
+  // 1. Downloaded wales_wa_2011_gen.kml from https://borders.ukdataservice.ac.uk/easy_download_data.html?data=Wales_wa_2011
+  // 2. Used https://mygeodata.cloud/converter/kml-to-geojson to convert to geojson
+  // 3. Used https://mapshaper.org/ to reduce quality to 70%
+  
   var geojson = {};
   var census_data = {};
+  var supply_data = {};
 
   JSZipUtils.getBinaryContent('data.zip', function(err, data) {
       if(err) {
@@ -56,8 +60,16 @@
       var zip = new JSZip(data);
       
       // Census boundaries
-      geojson = JSON.parse(zip.file("boundaries.json").asText());
+      geojson = JSON.parse(zip.file("wales_wa_2011_gen.json").asText());
+      // console.log(geojson);
       
+      //geojson = JSON.parse(zip.file("boundaries.json").asText());      
+      var results = JSON.parse(zip.file("supply.json").asText());
+      for (var z in results) {
+          var ward = results[z].ward;
+          if (supply_data[ward]==undefined) supply_data[ward] = [];
+          supply_data[ward].push(results[z]);
+      }
       // Census stats
       var results = Papa.parse(zip.file("census_data.csv").asText());
       for (var z in results.data) {
@@ -90,53 +102,67 @@
 
   function draw()
   {   
+  
+    var vectorSource = new ol.source.Vector({
+        features: (new ol.format.GeoJSON()).readFeatures(geojson, { 
+        dataProjection: 'EPSG:4326',
+        featureProjection:'EPSG:3857' })
+    });
+    
+    // vectorSource.forEachFeature(function(feature){
+    //    feature.getGeometry().translate(-0.7e6,6.6e6);
+    // });
+  
+    var vectorLayer = new ol.layer.Vector({
+      source: vectorSource,
+      style: function(feature) {
+
+        var ward = feature.get('code');
+        var households = census_data[ward][12];
+        var GWh = ((households * 15.7 * 365.25 ) / 1000000.0).toFixed(1);
+        
+        var shade = (255-(GWh*6.4));
+        if (shade<0) shade = 0;
+        if (shade>255) shade = 255;
+        
+        var style = new ol.style.Style({
+          fill: new ol.style.Fill({
+            color: 'rgba(255, '+shade+','+shade+', 0.6)'
+          }),
+          stroke: new ol.style.Stroke({
+            // color: 'rgba(255, '+shade+','+shade+', 1.0)',
+            color: '#666',
+            width: 0
+          }),
+          text: new ol.style.Text({
+            font: '12px Calibri,sans-serif',
+            fill: new ol.style.Fill({
+              color: '#000'
+            }),
+            stroke: new ol.style.Stroke({
+              color: '#fff',
+              width: 3
+            })
+          })
+        });
+        
+        style.getText().setText(feature.get('altname')+"\n"+GWh+" GWh");
+        return style;
+      }
+    });
+  
+  
     var map = new ol.Map({
       target: 'map',
       layers: [
-        //new ol.layer.Tile({
-        //  source: new ol.source.OSM()
-        //}),
-        new ol.layer.Vector({
-          source: new ol.source.Vector({
-            features: (new ol.format.GeoJSON()).readFeatures(geojson)
-          }),
-          style: function(feature) {
-
-            var ward = feature.get('code');
-            var households = census_data[ward][12];
-            var GWh = ((households * 15.7 * 365.25 ) / 1000000.0).toFixed(1);
-            
-            var shade = (255-(GWh*6.4));
-            if (shade<0) shade = 0;
-            if (shade>255) shade = 255;
-            
-            var style = new ol.style.Style({
-              fill: new ol.style.Fill({
-                color: 'rgba(255, '+shade+','+shade+', 0.6)'
-              }),
-              stroke: new ol.style.Stroke({
-                color: 'rgba(255, '+shade+','+shade+', 1.0)',
-                width: 0
-              }),
-              text: new ol.style.Text({
-                font: '12px Calibri,sans-serif',
-                fill: new ol.style.Fill({
-                  color: '#000'
-                }),
-                stroke: new ol.style.Stroke({
-                  color: '#fff',
-                  width: 3
-                })
-              })
-            });
-            
-            style.getText().setText(feature.get('name')+"\n"+GWh+" GWh");
-            return style;
-          }
-        })
+        new ol.layer.Tile({
+          source: new ol.source.OSM()
+        }),
+        vectorLayer
       ],
       view: new ol.View({
-        center: ol.proj.fromLonLat([2.5, 2.5]),
+        projection: 'EPSG:3857',
+        center: ol.proj.fromLonLat([-3.588333333,52.88361111]),
         zoom: 9
       })
     });
@@ -165,7 +191,7 @@
         var ward_data = {}
         ward_data.ward = ward;
         // ward_data.altname = feature.get('altname');
-        ward_data.name = feature.get('name');
+        ward_data.name = feature.get('altname');
         
         if (census_data[ward]!=undefined) {
             ward_data.county = census_data[ward][1];
@@ -178,6 +204,20 @@
         var out = "";
         for (var z in ward_data) {
             out += "<div><b>"+ucfirst(z)+":</b> "+ward_data[z]+"</div>";
+        }
+        
+        if (supply_data[ward]!=undefined) {
+          out += "<br><table class='table'>";
+          for (var z in supply_data[ward]) {
+              out += "<tr>";
+              out += "<td>"+ucfirst(supply_data[ward][z].type)+"</td>";
+              out += "<td>"+supply_data[ward][z].name+"</td>";
+              if (supply_data[ward][z].MW!=undefined) out += "<td>"+supply_data[ward][z].MW+" MW</td>";
+              if (supply_data[ward][z].kW!=undefined) out += "<td>"+supply_data[ward][z].kW+" kW</td>";
+              out += "<td>"+supply_data[ward][z].GWh+" GWh</td>";
+              out += "</tr>";
+          }
+          out += "</table>";
         }
         
         info.innerHTML = out;

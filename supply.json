@@ -1,0 +1,5 @@
+[
+  {"ward":"W05000051","name":"Maentwrog","type":"hydro","MW":33,"GWh":50},
+  {"ward":"W05000100","name":"Cwm Dyli","type":"hydro","MW":10,"GWh":17.3},
+  {"ward":"W05000095","name":"Croesor","type":"hydro","kW":505,"GWh":1.15}
+]
